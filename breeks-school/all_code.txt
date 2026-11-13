@@ -1,0 +1,195 @@
+===== C:\Users\harin\Downloads\breeks-school (4)\breeks-school\script.js =====
+/* =========================================================
+   SCHOOL SETTINGS – fill these in when you have the details.
+   School phone, e-mail, address and affiliation are already set in index.html.
+   Anything left empty below is simply hidden on the website.
+   ========================================================= */
+const CONFIG = {
+  whatsapp: "",      // e.g. "919876543210" (country code + number, no + sign)
+  hours: "",         // e.g. "Mon–Sat, 9:00 AM – 4:00 PM"
+  formEndpoint: "",  // e.g. a Formspree URL "https://formspree.io/f/xxxxxxx" to receive messages by email
+  social: { facebook: "", instagram: "", youtube: "" }   // full page URLs
+};
+
+/* Gallery photos (files live in assets/images/gallery/full and /thumb) */
+const CATEGORIES = {
+  annual:       "Annual Day",
+  awards:       "Awards & Guests",
+  sports:       "Sports Activities",
+  performances: "Performances"
+};
+const gallery = [
+  {n:"g01",cat:"awards",       title:"Champions with the trophy"},
+  {n:"g06",cat:"awards",       title:"Certificates and medals for young winners"},
+  {n:"g07",cat:"awards",       title:"Prize distribution by guests of honour"},
+  {n:"g17",cat:"awards",       title:"Guests of honour with the trophies"},
+  {n:"g18",cat:"awards",       title:"Guests of honour at the sports meet"},
+  {n:"g16",cat:"annual",       title:"Torch lighting ceremony"},
+  {n:"g11",cat:"annual",       title:"Kindergarten march past"},
+  {n:"g12",cat:"annual",       title:"March past in red"},
+  {n:"g13",cat:"annual",       title:"Yamuna team march past"},
+  {n:"g14",cat:"annual",       title:"March past in green"},
+  {n:"g15",cat:"annual",       title:"Teams on the athletics track"},
+  {n:"g03",cat:"sports",       title:"Sack race"},
+  {n:"g08",cat:"sports",       title:"Ball collection race for little ones"},
+  {n:"g09",cat:"sports",       title:"Musical chairs"},
+  {n:"g10",cat:"sports",       title:"Ready at the starting line"},
+  {n:"g02",cat:"performances", title:"The school band in performance"},
+  {n:"g04",cat:"performances", title:"Ribbon stick display"},
+  {n:"g05",cat:"performances", title:"Martial arts demonstration"}
+];
+const thumb = g => `assets/images/gallery/thumb/${g.n}.jpg`;
+const full  = g => `assets/images/gallery/full/${g.n}.jpg`;
+
+/* ---------- Navbar: scroll state, active link, progress bar, back-to-top ---------- */
+const nav = document.getElementById("mainNav"), hdr = document.getElementById("siteHeader");
+const links = [...document.querySelectorAll(".navbar .nav-link")];
+const secs = links.map(l => document.querySelector(l.getAttribute("href")));
+const bar = document.getElementById("progress"), toTop = document.getElementById("toTop");
+function onScroll(){
+  nav.classList.toggle("scrolled", scrollY > 30); hdr.classList.toggle("scrolled", scrollY > 30);
+  const max = document.documentElement.scrollHeight - innerHeight;
+  bar.style.width = (max > 0 ? scrollY / max * 100 : 0) + "%";
+  toTop.classList.toggle("show", scrollY > 600);
+  const y = scrollY + 140; let cur = 0;
+  secs.forEach((s,i) => { if(s && s.offsetTop <= y) cur = i; });
+  links.forEach((l,i) => l.classList.toggle("active", i === cur));
+}
+addEventListener("scroll", onScroll, {passive:true}); onScroll();
+toTop.addEventListener("click", () => scrollTo({top:0, behavior:"smooth"}));
+document.querySelectorAll("#navMenu a").forEach(a => a.addEventListener("click", () => {
+  const c = bootstrap.Collapse.getInstance(document.getElementById("navMenu")); if (c) c.hide();
+}));
+
+/* ---------- Scroll reveal with stagger ---------- */
+document.querySelectorAll(".stagger").forEach(g => g.querySelectorAll(".reveal").forEach((el,i) => el.style.setProperty("--d", (i % 4) * 0.1 + "s")));
+const io = new IntersectionObserver(es => es.forEach(e => { if(e.isIntersecting){ e.target.classList.add("show"); io.unobserve(e.target); } }), {threshold:.12, rootMargin:"0px 0px -40px 0px"});
+document.querySelectorAll(".reveal").forEach(el => io.observe(el));
+
+/* ---------- Get in Touch buttons focus the first field ---------- */
+document.querySelectorAll('a[href="#contactForm"]').forEach(a => a.addEventListener("click", () =>
+  setTimeout(() => document.getElementById("parent").focus({preventScroll:true}), 700)));
+
+/* ---------- Gallery ---------- */
+const filtersEl = document.getElementById("galleryFilters"), grid = document.getElementById("galleryGrid");
+let visible = [], idx = 0, activeFilter = "all";
+function buildFilters(){
+  const count = c => c === "all" ? gallery.length : gallery.filter(g => g.cat === c).length;
+  filtersEl.innerHTML = [["all","All Photos"], ...Object.entries(CATEGORIES)]
+    .map(([k,v]) => `<button role="tab" data-filter="${k}" class="${k===activeFilter?'active':''}">${v}<small>${count(k)}</small></button>`).join("");
+}
+function render(filter = "all"){
+  activeFilter = filter;
+  visible = gallery.filter(g => filter === "all" || g.cat === filter);
+  grid.innerHTML = "";
+  visible.forEach((g,i) => {
+    const el = document.createElement("div");
+    el.className = "g-item"; el.tabIndex = 0; el.setAttribute("role","button");
+    el.setAttribute("aria-label", "Open photo: " + g.title);
+    el.style.animationDelay = (i * 0.04) + "s";
+    el.innerHTML = `<img src="${thumb(g)}" alt="${g.title}" loading="lazy" decoding="async">
+      <div class="g-over"><i class="bi bi-arrows-fullscreen"></i><small>${CATEGORIES[g.cat]}</small><strong>${g.title}</strong></div>`;
+    el.addEventListener("click", () => openLb(i));
+    el.addEventListener("keydown", e => { if(e.key === "Enter" || e.key === " "){ e.preventDefault(); openLb(i); } });
+    grid.appendChild(el);
+  });
+  filtersEl.querySelectorAll("button").forEach(b => b.classList.toggle("active", b.dataset.filter === filter));
+}
+filtersEl.addEventListener("click", e => { const b = e.target.closest("button"); if(b) render(b.dataset.filter); });
+buildFilters(); render();
+
+// Buttons/tiles elsewhere that jump to a gallery category
+document.querySelectorAll("[data-goto]").forEach(a => a.addEventListener("click", () => render(a.dataset.goto)));
+
+/* ---------- Lightbox (keyboard + swipe) ---------- */
+const lbEl = document.getElementById("lightbox"), lbBody = document.getElementById("lbBody"), lbCount = document.getElementById("lbCount");
+const lb = new bootstrap.Modal(lbEl);
+function showLb(){
+  const g = visible[idx];
+  lbBody.style.animation = "none"; void lbBody.offsetWidth; lbBody.style.animation = "";
+  lbBody.innerHTML = `<img src="${full(g)}" alt="${g.title}"><figcaption><small>${CATEGORIES[g.cat]}</small><strong>${g.title}</strong></figcaption>`;
+  lbCount.textContent = `${idx + 1} / ${visible.length}`;
+}
+function openLb(i){ idx = i; showLb(); lb.show(); }
+const step = d => { idx = (idx + d + visible.length) % visible.length; showLb(); };
+document.getElementById("lbPrev").onclick = () => step(-1);
+document.getElementById("lbNext").onclick = () => step(1);
+lbEl.addEventListener("hidden.bs.modal", () => lbBody.innerHTML = "");
+addEventListener("keydown", e => { if(lbEl.classList.contains("show")){ if(e.key === "ArrowLeft") step(-1); if(e.key === "ArrowRight") step(1); } });
+let tx = 0;
+lbEl.addEventListener("touchstart", e => tx = e.changedTouches[0].clientX, {passive:true});
+lbEl.addEventListener("touchend", e => { const dx = e.changedTouches[0].clientX - tx; if(Math.abs(dx) > 50) step(dx < 0 ? 1 : -1); }, {passive:true});
+
+/* ---------- Contact details from CONFIG (empty values stay hidden) ---------- */
+const show = el => el.classList.remove("d-none");
+if (CONFIG.hours){ document.getElementById("hoursTxt").textContent = CONFIG.hours; show(document.querySelector('[data-c="hours"]')); }
+if (CONFIG.whatsapp){
+  const url = `https://wa.me/${CONFIG.whatsapp}?text=` + encodeURIComponent("Hello, I would like to know more about Breeks All India Secondary School.");
+  ["waFloat","waBtn"].forEach(id => { const a = document.getElementById(id); a.href = url; show(a); });
+}
+const icons = {facebook:"bi-facebook", instagram:"bi-instagram", youtube:"bi-youtube"};
+const socials = Object.entries(CONFIG.social).filter(([,u]) => u);
+if (socials.length){
+  document.getElementById("socialLinks").innerHTML = socials.map(([k,u]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${k}"><i class="bi ${icons[k]}"></i></a>`).join("");
+  show(document.getElementById("socialCol"));
+}
+
+/* ---------- Contact form ---------- */
+const form = document.getElementById("contactForm"), phone = document.getElementById("phone"), email = document.getElementById("email");
+function validate(){
+  let ok = true;
+  form.querySelectorAll("[required]").forEach(f => {
+    let valid = f.value.trim() !== "";
+    if (f === phone) valid = /^(\+91[\s-]?)?[6-9]\d{9}$/.test(f.value.replace(/\s/g,""));
+    if (f === email) valid = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.value.trim());
+    if (f.minLength > 0 && f.value.trim().length < f.minLength) valid = false;
+    f.classList.toggle("is-invalid", !valid); f.classList.toggle("is-valid", valid);
+    if (!valid) ok = false;
+  });
+  return ok;
+}
+form.addEventListener("input", e => { if (e.target.classList.contains("is-invalid")) validate(); });
+form.addEventListener("submit", async e => {
+  e.preventDefault();
+  const box = document.getElementById("formAlert"); box.className = "alert mt-4 d-none";
+  if (!validate()) { form.querySelector(".is-invalid").focus(); return; }
+  const btn = document.getElementById("submitBtn"), sp = btn.querySelector(".spinner-border"), lbl = btn.querySelector(".btn-label");
+  btn.disabled = true; sp.classList.remove("d-none"); lbl.textContent = "Submitting...";
+  const data = {student:student.value, parent:parent.value, phone:phone.value, email:email.value, subject:cls.value, message:msg.value};
+  const done = (cls_, text) => { box.className = "alert mt-4 " + cls_; box.textContent = text; btn.disabled = false; sp.classList.add("d-none"); lbl.textContent = "Send Message"; };
+  const reset = () => { form.reset(); form.querySelectorAll(".is-valid").forEach(f => f.classList.remove("is-valid")); };
+  if (CONFIG.formEndpoint){
+    try {
+      const r = await fetch(CONFIG.formEndpoint, {method:"POST", headers:{"Content-Type":"application/json", "Accept":"application/json"}, body:JSON.stringify(data)});
+      if (!r.ok) throw new Error();
+      done("alert-success", "Thank you! Your message has been sent. The school will get back to you soon."); reset();
+    } catch { done("alert-danger", "Sorry, we could not send your message. Please try again or contact the school directly."); }
+  } else {
+    setTimeout(() => {   // Demo mode: no backend connected yet
+      done("alert-info", "Demo mode: your details are valid, but no form service is connected yet, so this message has not been sent to the school."); reset();
+    }, 1000);
+  }
+});
+
+/* ---------- Faculty: horizontal scroll (arrows, drag, progress) ---------- */
+(function(){
+  const t = document.getElementById("tTrack"); if(!t) return;
+  const prev = document.getElementById("tPrev"), next = document.getElementById("tNext"), prog = document.getElementById("tProg");
+  const step = () => { const c = t.querySelector(".tcard"); return c ? (c.offsetWidth + 18) * 2 : 300; };
+  function upd(){
+    const max = t.scrollWidth - t.clientWidth;
+    prev.disabled = t.scrollLeft <= 2; next.disabled = t.scrollLeft >= max - 2;
+    const w = Math.max(12, t.clientWidth / t.scrollWidth * 100);
+    prog.style.width = w + "%";
+    prog.style.marginLeft = (max > 0 ? t.scrollLeft / max * (100 - w) : 0) + "%";
+  }
+  prev.addEventListener("click", () => t.scrollBy({left:-step(), behavior:"smooth"}));
+  next.addEventListener("click", () => t.scrollBy({left: step(), behavior:"smooth"}));
+  t.addEventListener("scroll", upd, {passive:true}); addEventListener("resize", upd); upd();
+  /* mouse drag (touch uses native swipe) */
+  let down=false, sx=0, sl=0, moved=false;
+  t.addEventListener("pointerdown", e => { if(e.pointerType!=="mouse") return; down=true; moved=false; sx=e.clientX; sl=t.scrollLeft; });
+  addEventListener("pointermove", e => { if(!down) return; const dx=e.clientX-sx; if(Math.abs(dx)>4){moved=true; t.classList.add("dragging");} t.scrollLeft = sl - dx; });
+  addEventListener("pointerup", () => { if(!down) return; down=false; t.classList.remove("dragging"); });
+})();
+
